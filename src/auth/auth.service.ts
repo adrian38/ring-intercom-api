@@ -15,10 +15,12 @@ export class AuthService {
     console.log('📤 Email:', email);
 
     return new Promise((resolve, reject) => {
-      const child = spawn('cmd', [
-        '/c',
-        'npx -p ring-client-api ring-auth-cli',
-      ]);
+      const isWin = process.platform === 'win32';
+      const shell = isWin ? 'cmd' : 'sh';
+      const arg = isWin ? '/c' : '-c';
+      const cliCommand = 'npx -p ring-client-api ring-auth-cli';
+
+      const child = spawn(shell, [arg, cliCommand]);
       this.currentProcesses.set(email, child);
 
       let step = 0;
