@@ -9,8 +9,7 @@ export class RingService {
   constructor(private readonly authService: AuthService) {}
 
   async openDoor(email: string): Promise<boolean> {
-    console.log('🔑 Abriendo puerta para el usuario:', email);
-
+    // Log esencial solo para depuración de errores
     const token = this.authService.getRefreshToken(email);
     if (!token) throw new Error('Usuario no autenticado');
 
@@ -19,22 +18,21 @@ export class RingService {
       ring = new RingApi({ refreshToken: token });
       this.ringApis.set(email, ring);
     }
-    try {
-      const devices = await ring.fetchRingDevices();
-      console.log('📦 Dispositivos Ring:', devices);
 
-      const intercom = devices.intercoms[0];
+    try {
+      // No logs de dispositivos ni locations, solo errores
+      const locations = await ring.getLocations();
+      const intercom = locations[0]?.intercoms?.[0];
       if (!intercom) throw new Error('No hay Ring Intercom');
 
-      await ring.restClient.request({
-        method: 'POST',
-        url: `https://api.ring.com/intercom/v1/intercoms/${intercom.id}/doorbot_unlock`,
-      });
-
+      await intercom.unlock();
+      // Solo log en caso de éxito real (opcional)
+      // console.log(`✅ Puerta abierta correctamente para ${email}`);
       return true;
     } catch (err) {
-      console.error('🚨 Error abriendo la puerta:', err);
-      throw err; // Esto lo recoge tu controlador y manda 500
+      // Solo loguea el mensaje del error
+      console.error(`❌ Error al abrir la puerta (${email}):`, err.message);
+      throw err;
     }
   }
 }
