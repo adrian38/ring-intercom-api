@@ -84,4 +84,7 @@ export class AuthService {
   isAutenticado(email: string): boolean {
     return this.tokenMap.has(email);
   }
+  deleteToken(email: string) {
+    this.tokenMap.delete(email);
+  }
 }

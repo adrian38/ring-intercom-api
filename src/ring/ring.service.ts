@@ -30,6 +30,17 @@ export class RingService {
       // console.log(`✅ Puerta abierta correctamente para ${email}`);
       return true;
     } catch (err) {
+      if (
+        err?.response?.status === 401 ||
+        (err?.message && err.message.includes('Unauthorized'))
+      ) {
+        // Limpia el token y la instancia RingApi para este usuario
+        this.authService.deleteToken(email); // debes crear este método en AuthService
+        this.ringApis.delete(email);
+        throw new Error(
+          'Sesión expirada o token inválido. Por favor, inicia sesión de nuevo.',
+        );
+      }
       // Solo loguea el mensaje del error
       console.error(`❌ Error al abrir la puerta (${email}):`, err.message);
       throw err;
