@@ -1,53 +1,40 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { RingApi } from 'ring-client-api';
-import * as dotenv from 'dotenv';
-
-dotenv.config();
+import { AuthService } from '../auth/auth.service';
 
 @Injectable()
-export class RingService implements OnModuleInit {
-  private ringApi: RingApi;
-  private readonly logger = new Logger(RingService.name);
+export class RingService {
+  private ringApis: Map<string, RingApi> = new Map();
 
-  async onModuleInit() {
-    console.log('⏳ Inicializando RingApi desde onModuleInit...');
+  constructor(private readonly authService: AuthService) {}
 
-    const refreshToken = process.env.RING_REFRESH_TOKEN;
-    if (!refreshToken) {
-      throw new Error('❌ Falta RING_REFRESH_TOKEN en el archivo .env');
+  async openDoor(email: string): Promise<boolean> {
+    console.log('🔑 Abriendo puerta para el usuario:', email);
+
+    const token = this.authService.getRefreshToken(email);
+    if (!token) throw new Error('Usuario no autenticado');
+
+    let ring = this.ringApis.get(email);
+    if (!ring) {
+      ring = new RingApi({ refreshToken: token });
+      this.ringApis.set(email, ring);
     }
-
     try {
-      this.ringApi = new RingApi({
-        refreshToken,
-        cameraStatusPollingSeconds: 20,
-        debug: false,
+      const devices = await ring.fetchRingDevices();
+      console.log('📦 Dispositivos Ring:', devices);
+
+      const intercom = devices.intercoms[0];
+      if (!intercom) throw new Error('No hay Ring Intercom');
+
+      await ring.restClient.request({
+        method: 'POST',
+        url: `https://api.ring.com/intercom/v1/intercoms/${intercom.id}/doorbot_unlock`,
       });
 
-      // 👉 Forzar inicialización y validar conexión
-      console.log('✅ RingApi inicializandose.');
-      await this.ringApi.getLocations();
-
-      console.log('✅ RingApi inicializado correctamente.');
-    } catch (error) {
-      console.error('❌ Error al inicializar RingApi:', error);
-    }
-  }
-
-  async openDoor(): Promise<boolean> {
-    try {
-      console.log('🚪 Ejecutando openDoor...');
-      const locations = await this.ringApi.getLocations();
-      const intercom = locations[0]?.intercoms?.[0];
-      if (!intercom) {
-        throw new Error('❌ No se encontró ningún Ring Intercom en tu cuenta.');
-      }
-      await intercom.unlock();
-      this.logger.log('✅ Puerta abierta correctamente.');
       return true;
-    } catch (error) {
-      this.logger.error(`❌ Error al abrir la puerta: ${error.message}`);
-      throw error;
+    } catch (err) {
+      console.error('🚨 Error abriendo la puerta:', err);
+      throw err; // Esto lo recoge tu controlador y manda 500
     }
   }
 }
