@@ -98,23 +98,32 @@ export class DeviceAuthController {
     <p id="msg"></p>
   </div>
 
-  <script>
-    const $ = (id) => document.getElementById(id);
-    const msg = (t, cls) => { const el = $('msg'); el.textContent = t; el.className = cls || ''; };
+ <script>
+  const $ = (id) => document.getElementById(id);
+  const msg = (t, cls) => { const el = $('msg'); el.textContent = t; el.className = cls || ''; };
 
-    async function postJson(url, data) {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      const text = await res.text();
-      let json;
-      try { json = JSON.parse(text); } catch { json = { raw: text }; }
-      return { ok: res.ok, json };
-    }
+  async function postJson(url, data) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(data),
+      // keepalive opcional para cortes de red
+    });
+    const text = await res.text();
+    let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
+    return { ok: res.ok, json };
+  }
 
-    $('btn').addEventListener('click', async () => {
+  let inflight = false; // ⬅️ evita dobles clics
+
+  $('btn').addEventListener('click', async (ev) => {
+    ev.preventDefault(); // ⬅️ evita submit implícito
+    if (inflight) return; // ⬅️ ya hay una petición en curso
+    inflight = true;
+    const btn = $('btn');
+    btn.disabled = true;
+
+    try {
       const email = $('email').value.trim();
       const password = $('password').value.trim();
       const code2fa = $('code2fa').value.trim();
@@ -130,7 +139,6 @@ export class DeviceAuthController {
       let r = await postJson('/auth/login', { email, password });
       if (!r.ok) { msg('Login fallido', 'err'); return; }
 
-      // Esperado: { status: "ok" } o { status: "2fa-required" }
       const status = (r.json && r.json.status) || 'error';
       if (status === '2fa-required') {
         if (!code2fa) { msg('Se requiere 2FA. Introduzca el código.', 'err'); return; }
@@ -140,13 +148,24 @@ export class DeviceAuthController {
         msg('Credenciales inválidas', 'err'); return;
       }
 
-      // 2) Autoriza el reloj
+      // 2) Autorizar reloj
       let r3 = await postJson('/device/authorize', { user_code, email });
       if (!r3.ok || !r3.json.ok) { msg('No se pudo autorizar el reloj', 'err'); return; }
 
       msg('¡Listo! Puede volver al reloj.', 'ok');
+    } finally {
+      inflight = false;
+      btn.disabled = false;
+    }
+  });
+
+  // (Opcional) Enter en inputs dispara el mismo handler, pero seguimos protegidos por "inflight"
+  ['email','password','code2fa','user_code'].forEach(id => {
+    $(id).addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') $('btn').click();
     });
-  </script>
+  });
+</script>
 </body>
 </html>`;
   }
