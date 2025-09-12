@@ -69,13 +69,17 @@ export class DeviceAuthController {
     .row { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .ok { color: #165e2b; }
     .err { color: #b91c1c; }
+    .muted { color:#6b7280; }
+    .stack { display:flex; gap:8px; flex-wrap:wrap; }
+    .btn-secondary { background:#374151; }
+    .disabled { opacity: .6; cursor: not-allowed; }
     small { color:#6b7280; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>Inicia sesión para vincular el reloj</h1>
-    <p><small>Introduzca sus credenciales. Si se solicita 2FA, introduzca el código y pulse Continuar.</small></p>
+    <p class="muted"><small>Introduzca sus credenciales. Si se solicita 2FA, introduzca el código y confirme.</small></p>
 
     <label>Código del reloj</label>
     <input id="user_code" placeholder="AAAA-11" value="${prefillUserCode}" />
@@ -94,13 +98,19 @@ export class DeviceAuthController {
     <label>Código 2FA (si se solicita)</label>
     <input id="code2fa" placeholder="123456" />
 
-    <button id="btn">Continuar</button>
+    <div class="stack">
+      <button id="btnLogin" type="button">1) Iniciar sesión</button>
+      <button id="btn2fa" type="button" class="btn-secondary disabled" disabled>2) Confirmar 2FA</button>
+    </div>
+
     <p id="msg"></p>
   </div>
 
   <script>
     const $ = (id) => document.getElementById(id);
     const msg = (t, cls) => { const el = $('msg'); el.textContent = t; el.className = cls || ''; };
+    function enable(el) { el.disabled = false; el.classList.remove('disabled'); }
+    function disable(el) { el.disabled = true; el.classList.add('disabled'); }
 
     async function postJson(url, data) {
       const res = await fetch(url, {
@@ -114,12 +124,9 @@ export class DeviceAuthController {
       return { ok: res.ok, json };
     }
 
-    let status = 'none'; // 'none', '2fa-required', 'ok'
-
-    $('btn').addEventListener('click', async () => {
+    $('btnLogin').addEventListener('click', async () => {
       const email = $('email').value.trim();
       const password = $('password').value.trim();
-      const code2fa = $('code2fa').value.trim();
       const user_code = $('user_code').value.trim().toUpperCase();
 
       if (!email || !password || !user_code) {
@@ -127,42 +134,17 @@ export class DeviceAuthController {
         return;
       }
 
-      if (status === '2fa-required') {
-        if (!code2fa) {
-          msg('Se requiere 2FA. Introduzca el código.', 'err');
-          return;
-        }
-
-        msg('Verificando 2FA…');
-        let r2 = await postJson('/auth/2fa', { email, code: code2fa });
-        if (!r2.ok) {
-          msg('2FA incorrecto', 'err');
-          return;
-        }
-
-        msg('2FA correcto. Autorizando reloj…');
-        let r3 = await postJson('/device/authorize', { user_code, email });
-        if (!r3.ok || !r3.json.ok) {
-          msg('No se pudo autorizar el reloj', 'err');
-          return;
-        }
-
-        msg('¡Listo! Puede volver al reloj.', 'ok');
-        status = 'none';
-        return;
-      }
-
       msg('Verificando credenciales…');
-      let r = await postJson('/auth/login', { email, password });
+      const r = await postJson('/auth/login', { email, password });
       if (!r.ok) {
         msg('Login fallido', 'err');
         return;
       }
 
-      status = (r.json && r.json.status) || 'error';
-
+      const status = (r.json && r.json.status) || 'error';
       if (status === '2fa-required') {
-        msg('2FA requerido. Introduzca el código y pulse Continuar.');
+        msg('2FA requerido. Introduzca el código y pulse "Confirmar 2FA".');
+        enable($('btn2fa'));
         return;
       }
 
@@ -171,15 +153,43 @@ export class DeviceAuthController {
         return;
       }
 
-      // Login ok sin 2FA
-      let r3 = await postJson('/device/authorize', { user_code, email });
+      // Login correcto sin 2FA
+      const r3 = await postJson('/device/authorize', { user_code, email });
       if (!r3.ok || !r3.json.ok) {
         msg('No se pudo autorizar el reloj', 'err');
         return;
       }
 
       msg('¡Listo! Puede volver al reloj.', 'ok');
-      status = 'none';
+    });
+
+    $('btn2fa').addEventListener('click', async () => {
+      const email = $('email').value.trim();
+      const code2fa = $('code2fa').value.trim();
+      const user_code = $('user_code').value.trim().toUpperCase();
+
+      if (!email || !code2fa || !user_code) {
+        msg('Complete el 2FA y el código del reloj.', 'err');
+        return;
+      }
+
+      msg('Verificando 2FA…');
+      const r2 = await postJson('/auth/2fa', { email, code: code2fa });
+      if (!r2.ok) {
+        msg('2FA incorrecto', 'err');
+        return;
+      }
+
+      msg('2FA correcto. Autorizando reloj…');
+      const r3 = await postJson('/device/authorize', { user_code, email });
+      if (!r3.ok || !r3.json.ok) {
+        msg('No se pudo autorizar el reloj', 'err');
+        return;
+      }
+
+      msg('¡Listo! Puede volver al reloj.', 'ok');
+      disable($('btnLogin'));
+      disable($('btn2fa'));
     });
   </script>
 </body>
