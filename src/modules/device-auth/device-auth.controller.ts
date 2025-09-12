@@ -82,21 +82,24 @@ export class DeviceAuthController {
     <p class="muted"><small>Introduzca sus credenciales. Si se solicita 2FA, introduzca el código.</small></p>
 
     <label>Código del reloj</label>
-    <input id="user_code" placeholder="AAAA-11" value="${prefillUserCode}" />
+    <input id="user_code" name="user_code" placeholder="AAAA-11" value="${prefillUserCode}"
+           autocomplete="one-time-code" inputmode="text" />
 
     <div class="row">
       <div>
         <label>Email</label>
-        <input id="email" type="email" placeholder="correo@dominio.com" />
+        <input id="email" name="email" type="email" placeholder="correo@dominio.com"
+               autocomplete="username email" inputmode="email" />
       </div>
       <div>
         <label>Password</label>
-        <input id="password" type="password" placeholder="••••••••" />
+        <input id="password" name="password" type="password" placeholder="••••••••"
+               autocomplete="current-password" />
       </div>
     </div>
 
     <label>Código 2FA (si se solicita)</label>
-    <input id="code2fa" placeholder="123456" />
+    <input id="code2fa" name="code2fa" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" />
 
     <div class="stack">
       <button id="btnLogin" type="button">1) Iniciar sesión</button>
@@ -124,6 +127,24 @@ export class DeviceAuthController {
     function enable(el) { el.disabled = false; el.classList.remove('disabled'); }
     function disable(el) { el.disabled = true; el.classList.add('disabled'); }
 
+    // Espera un frame para que el autofill/teclado confirme el valor en los inputs
+    const nextFrame = () => new Promise(requestAnimationFrame);
+    const smallDelay = (ms=50) => new Promise(r => setTimeout(r, ms));
+
+    async function readCreds() {
+      // fuerza commit del teclado/autofill
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      await nextFrame();
+      await smallDelay(50); // algunos navegadores necesitan un pelín más
+
+      const email = $('email').value.trim();
+      const password = $('password').value.trim();
+      const user_code = $('user_code').value.trim().toUpperCase();
+      const code2fa = $('code2fa').value.trim();
+
+      return { email, password, user_code, code2fa };
+    }
+
     let inflightLogin = false;
     let inflight2FA = false;
     let lastLoginStatus = 'none'; // 'none' | 'ok' | '2fa-required'
@@ -145,9 +166,7 @@ export class DeviceAuthController {
       disable($('btnLogin'));
 
       try {
-        const email = $('email').value.trim();
-        const password = $('password').value.trim();
-        const user_code = $('user_code').value.trim().toUpperCase();
+        const { email, password, user_code } = await readCreds();
 
         if (!email || !password || !user_code) {
           msg('Complete email, password y código del reloj.', 'err');
@@ -156,7 +175,6 @@ export class DeviceAuthController {
 
         msg('Verificando credenciales…');
 
-        // 1) Login
         const r = await postJson('/auth/login', { email, password });
         if (!r.ok) { msg('Login fallido', 'err'); enable($('btnLogin')); inflightLogin = false; return; }
 
@@ -164,17 +182,13 @@ export class DeviceAuthController {
         lastLoginStatus = status;
 
         if (status === 'ok') {
-          // Sin 2FA → autorizar directamente
           msg('Login correcto. Autorizando reloj…');
           const okAuth = await authorizeWatch(user_code, email);
-          if (!okAuth) { enable($('btnLogin')); } // permitir reintento si falló autorizar
-          // si autorizó, dejamos ambos deshabilitados
+          if (!okAuth) { enable($('btnLogin')); } // reintento si falla autorizar
         } else if (status === '2fa-required') {
-          // Requiere 2FA → habilitar botón 2FA y deshabilitar login
           msg('2FA requerido. Introduzca el código y pulse "Confirmar 2FA".');
           enable($('btn2fa'));
           $('code2fa').focus();
-          // btnLogin permanece deshabilitado para evitar dobles SMS / dobles intentos
         } else {
           msg('Credenciales inválidas', 'err');
           enable($('btnLogin'));
@@ -187,15 +201,13 @@ export class DeviceAuthController {
     $('btn2fa').addEventListener('click', async (ev) => {
       ev.preventDefault();
       if (inflight2FA) return;
-      if (lastLoginStatus !== '2fa-required') return; // seguridad extra
+      if (lastLoginStatus !== '2fa-required') return;
 
       inflight2FA = true;
       disable($('btn2fa'));
 
       try {
-        const email = $('email').value.trim();
-        const code2fa = $('code2fa').value.trim();
-        const user_code = $('user_code').value.trim().toUpperCase();
+        const { email, user_code, code2fa } = await readCreds();
 
         if (!email || !code2fa || !user_code) {
           msg('Complete el 2FA y el código del reloj.', 'err');
@@ -207,17 +219,15 @@ export class DeviceAuthController {
         const r2 = await postJson('/auth/2fa', { email, code: code2fa });
         if (!r2.ok) {
           msg('2FA incorrecto', 'err');
-          enable($('btn2fa')); // permite reintentar el 2FA
+          enable($('btn2fa'));
           return;
         }
 
         msg('2FA correcto. Autorizando reloj…');
         const okAuth = await authorizeWatch(user_code, email);
         if (!okAuth) {
-          // Si falló autorizar (no login/2FA), permitimos reintentar 2FA o volver a login
           enable($('btn2fa'));
         } else {
-          // Todo OK → ambos deshabilitados
           disable($('btnLogin'));
           disable($('btn2fa'));
         }
