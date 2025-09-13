@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { RingApi } from 'ring-client-api';
-import { AuthService } from '../auth/auth.service';
+import { AuthService } from '../modules/auth/auth.service';
 
 @Injectable()
 export class RingService {
