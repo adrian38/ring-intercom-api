@@ -23,7 +23,7 @@ export class DeviceAuthService {
   private DEFAULT_EXPIRES_SEC = Number(process.env.DEVICE_EXPIRES_SEC ?? 180);
   private DEFAULT_INTERVAL_SEC = Number(process.env.DEVICE_INTERVAL_SEC ?? 3);
   private PUBLIC_BASE_URL = (
-    process.env.PUBLIC_BASE_URL ?? 'https://ring-intercom-api.onrender.com'
+    process.env.PUBLIC_BASE_URL ?? 'https://ringaping.ddns.net'
   ).replace(/\/+$/, '');
 
   private genUserCode(): string {

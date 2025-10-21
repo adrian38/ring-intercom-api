@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthService } from './auth.service';
 import { RingToken, RingTokenSchema } from './schema/ring-token.schema';
+import { AuthController } from './auth.controller';
 
 @Module({
   imports: [
@@ -9,6 +10,7 @@ import { RingToken, RingTokenSchema } from './schema/ring-token.schema';
       { name: RingToken.name, schema: RingTokenSchema },
     ]),
   ],
+  controllers: [AuthController],
   providers: [AuthService],
   exports: [AuthService],
 })

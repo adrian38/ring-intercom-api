@@ -3,21 +3,19 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { RingService } from './ring/ring.service';
 import { RingController } from './ring/ring.controller';
-import { AuthService } from './modules/auth/auth.service';
-import { AuthController } from './modules/auth/auth.controller';
 import { DeviceAuthController } from './modules/device-auth/device-auth.controller';
 import { DeviceAuthModule } from './modules/device-auth/device-auth.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongoMonitorService } from './services/mongo-monitor.service';
-import {
-  RingToken,
-  RingTokenSchema,
-} from './modules/auth/schema/ring-token.schema';
+import { AuthModule } from './modules/auth/auth.module';
+import { RingModule } from './ring/ring.module';
 
 @Module({
   imports: [
     DeviceAuthModule,
+    AuthModule,
+    RingModule,
     ConfigModule.forRoot({ isGlobal: true }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
@@ -26,17 +24,9 @@ import {
         uri: config.getOrThrow<string>('MONGO_URI'),
       }),
     }),
-    MongooseModule.forFeature([
-      { name: RingToken.name, schema: RingTokenSchema },
-    ]),
   ],
 
-  controllers: [
-    AppController,
-    RingController,
-    AuthController,
-    DeviceAuthController,
-  ],
-  providers: [AppService, RingService, AuthService, MongoMonitorService],
+  controllers: [AppController, RingController, DeviceAuthController],
+  providers: [AppService, MongoMonitorService],
 })
 export class AppModule {}
